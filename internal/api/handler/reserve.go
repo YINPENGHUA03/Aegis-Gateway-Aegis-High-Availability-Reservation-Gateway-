@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"aegis-gateway/internal/global"
 	"aegis-gateway/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +34,7 @@ func HandleReserve(c *gin.Context) {
 	}
 
 	//hander接service
-	err := service.Reserve(c.Request.Context(), global.Redis, global.MQChannel, req.UserID, req.ResourceID)
+	err := service.Reserve(c.Request.Context(), req.UserID, req.ResourceID)
 
 	switch {
 	case err == nil:

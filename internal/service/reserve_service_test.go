@@ -70,7 +70,7 @@ func TestReserveConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func(userID string) {
 			defer wg.Done()
-			err := Reserve(ctx, rdb, ch, userID, 999)
+			err := Reserve(ctx, userID, 999)
 			if err == nil {
 				successCount.Add(1)
 			}
