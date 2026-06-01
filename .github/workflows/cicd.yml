@@ -115,7 +115,9 @@ jobs:
                       docker compose --env-file .env.prod -f docker-compose.prod.yml pull aegis-gateway
 
                       # 4. compose 自动识别镜像变更，只重启 aegis-gateway
-                      docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+                      # 为了避免 GitHub Actions SSH 超时，把输出重定向到日志文件
+                      docker compose --env-file .env.prod -f docker-compose.prod.yml up -d </dev/null >/tmp/deploy.log 2>&1
+                      cat /tmp/deploy.log
 
                       # 5. 清理悬空镜像，避免磁盘膨胀
                       docker image prune -f
