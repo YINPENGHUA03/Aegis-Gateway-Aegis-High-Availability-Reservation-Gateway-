@@ -10,10 +10,9 @@ import (
 	"aegis-gateway/pkg/distributed_lock"
 )
 
-// 给用户点击按钮加一个 2 秒钟的“技能冷却时间（CD）
+// TTL 保证锁最多 2 秒就自动消失，不会把用户永久锁死。
 // 这层中间件牺牲了一丁点极端情况下的用户重试体验，
-// 换取了系统核心逻辑（Lua 脚本和数据库）在高并发下的绝对静默和安全。
-// 这在处理稀缺资源预约时，是非常值得的取舍。
+// 换取系统核心逻辑（Lua 脚本和数据库）在高并发下的安全。
 func AntiSpamMiddleware(rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		//HTTP 规范里，自定义的请求头约定以 X- 开头，表示"这是非标准的、应用自己定义的字段"
