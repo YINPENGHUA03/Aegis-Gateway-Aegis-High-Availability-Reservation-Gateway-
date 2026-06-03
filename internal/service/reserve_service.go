@@ -41,8 +41,9 @@ func Reserve(ctx context.Context, userID string, resourceID int64) error {
 			true, //Exchange 找得到 Queue
 			false,
 			amqp.Publishing{
-				ContentType: "application/json",
-				Body:        body,
+				ContentType:  "application/json",
+				Body:         body,
+				DeliveryMode: amqp.Persistent,
 			},
 		)
 		if err1 != nil {
@@ -56,8 +57,9 @@ func Reserve(ctx context.Context, userID string, resourceID int64) error {
 			true, //Exchange 找得到 Queue
 			false,
 			amqp.Publishing{
-				ContentType: "application/json",
-				Body:        body,
+				ContentType:  "application/json",
+				Body:         body,
+				DeliveryMode: amqp.Persistent,
 			},
 		)
 		if err2 != nil {
