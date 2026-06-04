@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"aegis-gateway/internal/api/handler"
 	"aegis-gateway/internal/api/middleware"
+	"aegis-gateway/internal/global"
 	"net/http"
 	"os"
 
@@ -37,8 +38,8 @@ func SetupRouter() *gin.Engine {
 			})
 		})
 		//Registration route
-		//v1.POST("/reserve", middleware.AntiSpamMiddleware(global.Redis), handler.HandleReserve)
-		v1.POST("/reserve", handler.HandleReserve)
+		v1.POST("/reserve", middleware.AntiSpamMiddleware(global.Redis), handler.HandleReserve)
+		//v1.POST("/reserve", handler.HandleReserve)
 	}
 
 	return r
