@@ -54,7 +54,7 @@ graph TD
 - 200并发压测中，1 库存 200 请求，恰好 1 成功
 - 启动时用 ScriptLoad 缓存 SHA 1，请求复用 EvalSha 减少网络传输
 
-### 2. 防重复：分布式实名锁 (5s TTL + 看门狗续期)
+### 2. 防重复：分布式实名锁 (2s TTL + 看门狗续期)
 - uuid + SETNX 加锁
 - Watchdog goroutine 每 TTL/3 用 Lua check-and-PEXPIRE续期
 - Unlock 用 Lua check-and-DEL 防止误删其他用户的锁
@@ -78,7 +78,7 @@ graph TD
 ### 测试环境
 
 WSL2 (Ubuntu) + Redis/MySQL/RabbitMQ Docker 单机部署。
-`ulimit -n 65535`，Redis 未做持久化（AOF off），RabbitMQ delivery_mode=2（持久化消息）。
+`ulimit -n 65535`，Redis 开启 AOF 持久化（`appendonly yes`），RabbitMQ delivery_mode=2（持久化消息）。
 8 线程 / 200 并发 / 30 秒压测
 
 ### A 组：HTTP 层吞吐极限（不触发 Lua / Redis）
@@ -176,7 +176,7 @@ CREATE TABLE t_order (
     updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP
                                        ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY  uk_user_resource (user_id, resource_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 ```
 
 **设计取舍：**

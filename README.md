@@ -54,7 +54,7 @@ graph TD
 - Verified under load: 200 concurrent requests against 1 unit of stock — **exactly 1 success**
 - The script is uploaded once at startup via `ScriptLoad`; requests reuse the 40-byte SHA1 with `EvalSha` to cut network payload
 
-### 2. Anti-Duplicate: Per-User Distributed Lock (5s TTL + Watchdog renewal)
+### 2. Anti-Duplicate: Per-User Distributed Lock (2s TTL + Watchdog renewal)
 
 - UUID + SETNX for ownership-tagged acquisition
 - A `Watchdog` goroutine renews the TTL every `TTL/3` via a Lua `check-and-PEXPIRE`
@@ -80,7 +80,7 @@ graph TD
 
 ### Test Environment
 WSL2 (Ubuntu) + Redis/MySQL/RabbitMQ Docker single-machine deployment. 
-`ulimit -n 65535`, Redis not persisted (AOF off), RabbitMQ delivery_mode=2 (persistent messages).
+`ulimit -n 65535`, Redis AOF persistence enabled (`appendonly yes`), RabbitMQ delivery_mode=2 (persistent messages).
 8 threads / 200 connections / 30-second load test 
 
 ### Group A: HTTP Layer Ceiling (no Lua / Redis hit)
@@ -174,7 +174,7 @@ CREATE TABLE t_order (
     updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP
                                        ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY  uk_user_resource (user_id, resource_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 ```
 
 **Design trade-offs:**
