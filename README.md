@@ -140,7 +140,7 @@ graph LR
     Push[git push main] --> CI[GitHub Actions]
     CI --> Test["Job 1<br/>go test -race ./..."]
     Test --> Build["Job 2<br/>Docker multi-stage build<br/>push ghcr.io/.../aegis-gateway:SHA"]
-    Build --> Deploy["Job 3<br/>SSH to VPS<br/>sed IMAGE_TAG → compose pull → up -d"]
+    Build --> Deploy["Job 3<br/>SSH to VPS<br/>sed IMAGE_TAG → compose pull → up -d<br/>poll /healthz → rollback on failure"]
     Deploy --> VPS[(Production VPS<br/>aegis-gateway + MariaDB<br/>+ Redis + RabbitMQ)]
 
     classDef job fill:#e8f5e9,stroke:#2e7d32,color:#333;
@@ -156,6 +156,9 @@ graph LR
 - **Dedicated CI SSH key**: a separate ed25519 keypair scoped only to deploy; personal SSH key never touches GitHub Secrets.
 - **PAT for VPS image pull**: a token with `read:packages` only — leak blast radius is read-only, distinct from the build-time `GITHUB_TOKEN`.
 - **`sed -i` over `>` for `.env.prod`**: deploys patch `IMAGE_TAG` in place, preserving production credentials in the same file.
+- **`/healthz` deep health check + automatic rollback**: a root-level `GET /healthz` (outside `/api/v1`, bypassing AntiSpam) actively pings Redis, MySQL, and the RabbitMQ channel — returning `503` if any dependency is down, `200 {"status":"healthy"}` otherwise. It is used in two places:
+  - **Compose healthcheck**: the `aegis-gateway` service probes `/healthz` via `wget` (Alpine has no `curl`) every 10s, so Docker reports container health accurately.
+  - **Post-deploy gate**: after `up -d`, the deploy job backs up the previous `IMAGE_TAG` (`.env.prod.bak`) and polls `/healthz` up to 20 times (3s apart, ~60s max). On success it prunes dangling images and exits 0; if all 20 probes fail, it `sed`s `IMAGE_TAG` back to the previous SHA, redeploys, and exits 1 so CI turns red and a broken image never stays live.
 
 ---
 
@@ -287,7 +290,7 @@ wrk -t8 -c200 -d30s -s /tmp/reserve.lua http://localhost:8080/api/v1/reserve
 
 - [x] Graceful shutdown (SIGTERM waits for in-flight consumer work)
 - [x] End-to-end CI/CD on GitHub Actions: tests → build & push image to ghcr.io → SSH deploy to VPS
-- [ ] Post-deploy health check + automatic rollback on failure
+- [x] Post-deploy health check + automatic rollback on failure (`/healthz` deep probe + 20x poll → rollback)
 - [ ] Redis pipeline batching (expected +50% QPS)
 - [ ] Local in-memory pre-deduction + async Redis sync (expected 5-10x)
 - [ ] Dead letter table persistence (audit trail for operations)

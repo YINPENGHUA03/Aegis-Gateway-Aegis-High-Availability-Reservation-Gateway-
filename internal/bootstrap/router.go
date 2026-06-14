@@ -27,6 +27,32 @@ func SetupRouter() *gin.Engine {
 	} else {
 		r.Use(middleware.IPRateLimitMiddleware(rate.Limit(5), 10)) // 生产
 	}
+	// 健康检查：挂在 root 上，不走 /api/v1 group、不过 AntiSpam，
+	// 供 compose healthcheck 与 CI 部署后探活
+	r.GET("/healthz", func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		// 1.Redis
+		if err := global.Redis.Ping(ctx).Err(); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"redis": err.Error()})
+			return
+		}
+
+		// 2.MySQL
+		if err := global.DB.PingContext(ctx); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"mysql": err.Error()})
+			return
+		}
+
+		// 3.RabbitMQ channel
+		if global.MQChannel.IsClosed() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"rabbitmq": "channel closed"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
+
 	// API group
 	v1 := r.Group("/api/v1")
 	{
@@ -37,6 +63,7 @@ func SetupRouter() *gin.Engine {
 				"redis":  "connected",
 			})
 		})
+
 		//Registration route
 		v1.POST("/reserve", middleware.AntiSpamMiddleware(global.Redis), handler.HandleReserve)
 		//v1.POST("/reserve", handler.HandleReserve)

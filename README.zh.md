@@ -142,7 +142,7 @@ graph LR
     Push[git push main] --> CI[GitHub Actions]
     CI --> Test["Job 1<br/>go test -race ./..."]
     Test --> Build["Job 2<br/>Docker 多阶段构建<br/>推到 ghcr.io/.../aegis-gateway:SHA"]
-    Build --> Deploy["Job 3<br/>SSH 进 VPS<br/>sed IMAGE_TAG → compose pull → up -d"]
+    Build --> Deploy["Job 3<br/>SSH 进 VPS<br/>sed IMAGE_TAG → compose pull → up -d<br/>轮询 /healthz → 失败回滚"]
     Deploy --> VPS[(生产 VPS<br/>aegis-gateway + MariaDB<br/>+ Redis + RabbitMQ)]
 
     classDef job fill:#e8f5e9,stroke:#2e7d32,color:#333;
@@ -158,6 +158,9 @@ graph LR
 - **CI 专用 SSH key**：单独的 ed25519 keypair 只授权部署；个人 SSH key 不进 GitHub Secrets。
 - **PAT 代替 GITHUB_TOKEN 拉镜像**：VPS 用只有 `read:packages` 权限的 token，即使泄漏影响面也只读。
 - **`sed -i` 而不是 `>` 覆盖 `.env.prod`**：部署时只改 `IMAGE_TAG`，保留生产凭据，避免清空所有配置。
+- **`/healthz` 深度健康检查 + 自动回滚**：根级 `GET /healthz`（挂在 `/api/v1` 之外、不过 AntiSpam）主动 ping Redis、MySQL 和 RabbitMQ channel——任一依赖挂掉返回 `503`，全部正常返回 `200 {"status":"healthy"}`。用在两处：
+  - **Compose 健康检查**：`aegis-gateway` 服务每 10s 用 `wget` 探活 `/healthz`（Alpine 基础镜像没 `curl`），让 Docker 准确上报容器健康状态。
+  - **部署后探活闸门**：`up -d` 后，deploy job 先备份上一个 `IMAGE_TAG`（`.env.prod.bak`），再轮询 `/healthz` 最多 20 次（每次间隔 3s，约 60s 上限）。成功则清理悬空镜像并 exit 0；若 20 次全挂，则用 `sed` 把 `IMAGE_TAG` 改回上一个 SHA、重新部署并 exit 1，让 CI 标红、坏镜像绝不留在线上。
 
 ---
 
@@ -287,7 +290,7 @@ wrk -t8 -c200 -d30s -s /tmp/reserve.lua http://localhost:8080/api/v1/reserve
 
 - [x] Graceful shutdown（SIGTERM 等消费者处理完手头消息）
 - [x] GitHub Actions 端到端 CI/CD：测试 → 构建镜像 → 推 ghcr.io → SSH 部署 VPS
-- [ ] 部署后健康检查 + 失败自动回滚
+- [x] 部署后健康检查 + 失败自动回滚（`/healthz` 深度探活 + 20 次轮询 → 回滚）
 - [ ] Redis pipeline 批处理（预期 QPS +50%）
 - [ ] 本地内存预扣减 + Redis 异步同步（预期 5-10x）
 - [ ] 死信表持久化（运维可追溯）

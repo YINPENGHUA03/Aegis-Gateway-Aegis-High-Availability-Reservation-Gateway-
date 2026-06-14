@@ -106,6 +106,7 @@ jobs:
                       cd /opt/aegis-gateway
 
                       # 1. 就地替换 IMAGE_TAG，保留 .env.prod 里其他配置（密码、地址）
+                      cp .env.prod .env.prod.bak   # 存下旧 tag,回滚时读它
                       sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ github.sha }}|" .env.prod
 
                       # 2. 登录 ghcr.io（用专门的 PAT，不是 GITHUB_TOKEN）
@@ -117,8 +118,29 @@ jobs:
                       # 4. compose 自动识别镜像变更，只重启 aegis-gateway
                       # 为了避免 GitHub Actions SSH 超时，把输出重定向到日志文件
                       docker compose --env-file .env.prod -f docker-compose.prod.yml up -d </dev/null >/tmp/deploy.log 2>&1
-                      cat /tmp/deploy.log
+                      #记录上一个TAG用来回滚
+                      PREV_TAG=$(grep '^IMAGE_TAG=' .env.prod.bak 2>/dev/null | cut -d= -f2 || echo "")
+                      # 轮询20次，每次3s 最多60s等健康
+                      for i in $(seq 1 20); do
+                       if curl -fs http://localhost:8080/healthz > /dev/null; then
+                        echo "Health check passed at attempt $i"
+                         # 5. 清理悬空镜像，避免磁盘膨胀
+                        docker image prune -f
+                        exit 0
+                       fi
+                       echo "attempt $i/20 failed, retrying..."
+                       sleep 3
+                      done
 
-                      # 5. 清理悬空镜像，避免磁盘膨胀
-                      docker image prune -f
+                      #6.若走到这说明20次全挂，回滚
+                      echo "Health check FAILED, rolling back to $PREV_TAG"
+                      # 用 sed 就地修改 .env.prod 文件，把 IMAGE_TAG= 那一行的值替换成 ${PREV_TAG}
+                      sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${PREV_TAG}|" .env.prod
+                      docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+                      cat /tmp/deploy.log
+                      exit 1   # 让 CI 标红,你能收到失败通知
+                      
+
+                     
+                    
 

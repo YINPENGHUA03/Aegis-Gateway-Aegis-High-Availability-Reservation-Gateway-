@@ -67,6 +67,13 @@ services:
       rabbitmq:
         condition: service_started
     restart: on-failure
+    healthcheck:
+    #alpine 基础镜像有 wget 没 curl,所以用 wget
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s   # 给启动留 buffer
 
 volumes:
   mysql_data:
