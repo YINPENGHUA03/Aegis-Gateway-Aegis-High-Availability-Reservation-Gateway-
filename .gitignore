@@ -27,8 +27,10 @@ vendor/
 # Compilation output
 dist/
 
-#claude(temporary)
-.claude
+# Claude Code: agents are personal/local (contain private profile), keep out of git
+.claude/agents/
+.claude/settings.local.json
+.claude/*.local.json
 
 # IDE
 .idea/
